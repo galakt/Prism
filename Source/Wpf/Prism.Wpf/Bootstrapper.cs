@@ -8,7 +8,7 @@ using Prism.Logging;
 using Prism.Modularity;
 using Prism.Regions;
 using Prism.Regions.Behaviors;
-using Microsoft.Practices.ServiceLocation;
+using CommonServiceLocator;
 using Prism.Mvvm;
 
 namespace Prism
@@ -20,6 +20,7 @@ namespace Prism
     /// <remarks>
     /// This class must be overridden to provide application specific configuration.
     /// </remarks>
+    [Obsolete("It is recommended to use the new PrismApplication as the app's base class. This will require updating the App.xaml and App.xaml.cs files. The Bootstrapper may be removed in a future release.")]
     public abstract class Bootstrapper
     {
         /// <summary>
@@ -57,6 +58,8 @@ namespace Prism
         public void Run()
         {
             this.Run(true);
+
+            this.OnInitialized();
         }
 
         /// <summary>
@@ -92,7 +95,7 @@ namespace Prism
         protected virtual void RegisterFrameworkExceptionTypes()
         {
             ExceptionExtensions.RegisterFrameworkExceptionType(
-                typeof(Microsoft.Practices.ServiceLocation.ActivationException));
+                typeof(ActivationException));
         }
 
         /// <summary>
@@ -192,5 +195,12 @@ namespace Prism
         /// Configures the LocatorProvider for the <see cref="Microsoft.Practices.ServiceLocation.ServiceLocator" />.
         /// </summary>
         protected abstract void ConfigureServiceLocator();
+
+        /// <summary>
+        /// Contains actions that should occur last.
+        /// </summary>
+        protected virtual void OnInitialized()
+        {
+        }
     }
 }

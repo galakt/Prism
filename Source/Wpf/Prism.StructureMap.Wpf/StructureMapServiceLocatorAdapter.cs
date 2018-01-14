@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using StructureMap;
-using Microsoft.Practices.ServiceLocation;
+using CommonServiceLocator;
 
 namespace Prism.StructureMap
 {
@@ -22,7 +22,7 @@ namespace Prism.StructureMap
         public StructureMapServiceLocatorAdapter(IContainer container)
         {
             if (container == null)
-                throw new ArgumentNullException("container");
+                throw new ArgumentNullException(nameof(container));
             _container = container;
         }
 

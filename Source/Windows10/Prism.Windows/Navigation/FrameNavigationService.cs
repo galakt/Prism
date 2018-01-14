@@ -114,10 +114,9 @@ namespace Prism.Windows.Navigation
         /// </summary>
         public void ClearHistory()
         {
-            _frame.SetNavigationState("1,0");
+            _frame.ClearBackStack();
         }
-
-
+        
         /// <summary>
         /// Remove the first page of the backstack with optional pageToken and parameter
         /// </summary>
@@ -219,7 +218,7 @@ namespace Prism.Windows.Navigation
             NavigateToCurrentViewModel(new NavigatedToEventArgs()
             {
                 NavigationMode = NavigationMode.Refresh,
-                Parameter = _sessionStateService.SessionState[LastNavigationParameterKey]
+                Parameter = _sessionStateService.SessionState.ContainsKey(LastNavigationParameterKey) ? _sessionStateService.SessionState[LastNavigationParameterKey] : null
             });
         }
 

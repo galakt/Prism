@@ -1,9 +1,10 @@
-﻿using System.Windows.Input;
+﻿using System;
+using System.Windows.Input;
 
 namespace Prism.Services
 {
     /// <summary>
-    /// Convenient contract to enable executing commands directly when using <see cref="IPageDialogService.DisplayActionSheet(string, IActionSheetButton[])"/>
+    /// Convenient contract to enable executing commands directly when using <see cref="IPageDialogService.DisplayActionSheetAsync(string, IActionSheetButton[])"/>
     /// </summary>
     public interface IActionSheetButton
     {
@@ -23,8 +24,8 @@ namespace Prism.Services
         string Text { get; }
 
         /// <summary>
-        /// Command to execute when button is pressed
+        /// Presses the button.
         /// </summary>
-        ICommand Command { get; }
+        void PressButton();
     }
 }

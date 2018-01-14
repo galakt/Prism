@@ -1,8 +1,6 @@
-
-
 using System;
 
-namespace Microsoft.Practices.ServiceLocation
+namespace CommonServiceLocator
 {
     /// <summary>
     /// Defines extension methods for the <see cref="ServiceLocator"/> class.
@@ -20,7 +18,7 @@ namespace Microsoft.Practices.ServiceLocation
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="locator"/> is <see langword="null"/>.</exception>
         public static object TryResolve(this IServiceLocator locator, Type type)
         {
-            if (locator == null) throw new ArgumentNullException("locator");
+            if (locator == null) throw new ArgumentNullException(nameof(locator));
 
             try
             {

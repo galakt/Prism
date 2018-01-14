@@ -28,7 +28,7 @@ namespace Prism.Mvvm
         {
             if (raiseErrorsChanged == null)
             {
-                throw new ArgumentNullException("raiseErrorsChanged");
+                throw new ArgumentNullException(nameof(raiseErrorsChanged));
             }
 
             this.raiseErrorsChanged = raiseErrorsChanged;
@@ -62,6 +62,17 @@ namespace Prism.Mvvm
             else
             {
                 return noErrors;
+            }
+        }
+
+        /// <summary>
+        /// Clears all errors.
+        /// </summary>
+        public void ClearErrors()
+        {
+            foreach (var key in this.validationResults.Keys.ToArray())
+            {
+                ClearErrors(key);
             }
         }
 

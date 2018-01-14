@@ -1,5 +1,6 @@
 
 
+using System.ComponentModel;
 using System.Windows;
 
 #if NETFX_CORE
@@ -20,6 +21,7 @@ namespace Prism.Mvvm
         {
             return (bool)obj.GetValue(AutoWireViewModelProperty);
         }
+
         public static void SetAutoWireViewModel(DependencyObject obj, bool value)
         {
             obj.SetValue(AutoWireViewModelProperty, value);
@@ -27,15 +29,20 @@ namespace Prism.Mvvm
 
         private static void AutoWireViewModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if ((bool)e.NewValue)
-                ViewModelLocationProvider.AutoWireViewModelChanged(d, Bind);
+            if (!DesignerProperties.GetIsInDesignMode(d))
+            {
+                if ((bool)e.NewValue)
+                {
+                    ViewModelLocationProvider.AutoWireViewModelChanged(d, Bind);
+                }
+            }
         }
 
         /// <summary>
         /// Sets the DataContext of a View
         /// </summary>
         /// <param name="view">The View to set the DataContext on</param>
-        /// <param name="dataContext">The object to use as the DataContext for the View</param>
+        /// <param name="viewModel">The object to use as the DataContext for the View</param>
         static void Bind(object view, object viewModel)
         {
             FrameworkElement element = view as FrameworkElement;

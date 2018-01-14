@@ -21,7 +21,7 @@ namespace Prism.Windows
     /// </summary>
     public abstract class PrismApplication : Application
     {
-
+        private bool _handledOnResume;
         private bool _isRestoringFromTermination;
 
         /// <summary>
@@ -31,6 +31,8 @@ namespace Prism.Windows
         protected PrismApplication()
         {
             Suspending += OnSuspending;
+            Resuming += OnResuming;
+
             Logger = CreateLogger();
             if (Logger == null)
             {
@@ -39,6 +41,12 @@ namespace Prism.Windows
 
             Logger.Log("Created Logger", Category.Debug, Priority.Low);
         }
+
+        /// <summary>
+        /// Gets or sets whether the application triggers navigation restore on app resume.
+        /// Default = true
+        /// </summary>
+        protected bool RestoreNavigationStateOnResume { get; set; } = true;
 
         /// <summary>
         /// Gets the <see cref="ILoggerFacade"/> for the application.
@@ -103,6 +111,7 @@ namespace Prism.Windows
 
         /// <summary>
         /// Override this method with logic that will be performed after the application is initialized. For example, navigating to the application's home page.
+        /// Note: This is called whenever the app is launched normally (start menu, taskbar, etc.) but not when resuming.
         /// </summary>
         /// <param name="args">The <see cref="LaunchActivatedEventArgs"/> instance containing the event data.</param>
         protected abstract Task OnLaunchApplicationAsync(LaunchActivatedEventArgs args);
@@ -113,7 +122,7 @@ namespace Prism.Windows
         ///  For example, navigating to the application's home page.
         /// </summary>
         /// <param name="args">The <see cref="IActivatedEventArgs"/> instance containing the event data.</param>
-        protected virtual Task OnActivateApplicationAsync(IActivatedEventArgs args) { return Task.FromResult<object>(null); }
+        protected virtual Task OnActivateApplicationAsync(IActivatedEventArgs args) { return Task.CompletedTask; }
 
         /// <summary>
         /// Creates and Configures the container if using a container
@@ -133,7 +142,11 @@ namespace Prism.Windows
         /// </remarks>
         protected virtual ILoggerFacade CreateLogger()
         {
+#if DEBUG        
             return new DebugLogger();
+#else
+            return new EmptyLogger();
+#endif            
         }
 
         /// <summary>
@@ -141,7 +154,7 @@ namespace Prism.Windows
         /// </summary>
         protected virtual void ConfigureViewModelLocator()
         {
-            ViewModelLocationProvider.SetDefaultViewModelFactory((type) => Resolve(type));
+            ViewModelLocationProvider.SetDefaultViewModelFactory(Resolve);
         }
 
         /// <summary>
@@ -151,9 +164,9 @@ namespace Prism.Windows
         /// <returns>The type of the page which corresponds to the specified token.</returns>
         protected virtual Type GetPageType(string pageToken)
         {
-            var assemblyQualifiedAppType = this.GetType().AssemblyQualifiedName;
+            var assemblyQualifiedAppType = GetType().AssemblyQualifiedName;
 
-            var pageNameWithParameter = assemblyQualifiedAppType.Replace(this.GetType().FullName, this.GetType().Namespace + ".Views.{0}Page");
+            var pageNameWithParameter = assemblyQualifiedAppType.Replace(GetType().FullName, GetType().Namespace + ".Views.{0}Page");
 
             var viewFullName = string.Format(CultureInfo.InvariantCulture, pageNameWithParameter, pageToken);
             var viewType = Type.GetType(viewFullName);
@@ -162,7 +175,7 @@ namespace Prism.Windows
             {
                 var resourceLoader = ResourceLoader.GetForCurrentView(Constants.InfrastructureResourceMapId);
                 throw new ArgumentException(
-                    string.Format(CultureInfo.InvariantCulture, resourceLoader.GetString("DefaultPageTypeLookupErrorMessage"), pageToken, this.GetType().Namespace + ".Views"),
+                    string.Format(CultureInfo.InvariantCulture, resourceLoader.GetString("DefaultPageTypeLookupErrorMessage"), pageToken, GetType().Namespace + ".Views"),
                     nameof(pageToken));
             }
 
@@ -180,7 +193,25 @@ namespace Prism.Windows
         /// <param name="args">The <see cref="IActivatedEventArgs"/> instance containing the event data.</param>
         protected virtual Task OnInitializeAsync(IActivatedEventArgs args)
         {
-            return Task.FromResult<object>(null);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Override this method with logic that will be performed when resuming after the application is initialized. 
+        /// For example, refreshing user credentials.
+        /// 
+        /// This method is called after the navigation state is restored, triggering the OnNavigatedTo event on the active view model.
+        /// 
+        /// Note: This is called whenever the app is resuming from suspend and terminate, but not during a fresh launch and 
+        /// not when reactivating the app if it hasn't been suspended.
+        /// </summary>
+        /// <param name="args">
+        /// - The <see cref="IActivatedEventArgs"/> instance containing the event data if the app is activated.
+        /// - Null if the app is only suspended and resumed without reactivation 
+        /// </param>
+        protected virtual Task OnResumeApplicationAsync(IActivatedEventArgs args)
+        {
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -191,6 +222,28 @@ namespace Prism.Windows
         protected virtual object Resolve(Type type)
         {
             return Activator.CreateInstance(type);
+        }
+
+        /// <summary> Invoked when the application is activated via ShareTarget.
+        /// OnShareTargetActivated is the entry point for an application when it is activated through sharing.
+        /// Call <see cref="OnActivated"/> to bootstrap the prism application.
+        /// </summary>
+        /// <param name="args">Event data for the event.</param>
+        protected override void OnShareTargetActivated(ShareTargetActivatedEventArgs args)
+        {
+            base.OnShareTargetActivated(args);
+            OnActivated(args);
+        }
+
+        /// <summary>
+        /// OnFileActivated is the entry point for an application when it is launched and the ActivationKind is File.
+        /// Call <see cref="OnActivated"/> to bootstrap the prism application.
+        /// </summary>
+        /// <param name="args">Event data for the event.</param>
+        protected override void OnFileActivated(FileActivatedEventArgs args)
+        {
+            base.OnFileActivated(args);
+            OnActivated(args);
         }
 
         /// <summary>
@@ -210,6 +263,10 @@ namespace Prism.Windows
             {
                 await OnActivateApplicationAsync(args);
             }
+            else if (Window.Current.Content != null && _isRestoringFromTermination && !_handledOnResume)
+            {
+                await OnResumeApplicationAsync(args);
+            }
 
             // Ensure the current window is active
             Window.Current.Activate();
@@ -228,8 +285,8 @@ namespace Prism.Windows
         }
 
         /// <summary>
-        /// Invoked when the application is launched normally by the end user. Other entry points
-        /// will be used when the application is launched to open a specific file, to display
+        /// Invoked when the application is launched normally by the end user and the application is not resuming.
+        /// Other entry points will be used when the application is launched to open a specific file, to display
         /// search results, and so forth.
         /// </summary>
         /// <param name="args">Details about the launch request and process.</param>
@@ -245,6 +302,10 @@ namespace Prism.Windows
             if (Window.Current.Content != null && (!_isRestoringFromTermination || (args != null && args.TileId != tileId)))
             {
                 await OnLaunchApplicationAsync(args);
+            }
+            else if (Window.Current.Content != null && _isRestoringFromTermination)
+            {
+                await OnResumeApplicationAsync(args);
             }
 
             // Ensure the current window is active
@@ -288,6 +349,16 @@ namespace Prism.Windows
         protected virtual ISessionStateService OnCreateSessionStateService() => null;
 
         /// <summary>
+        /// Override this method to provide custom logic that determines whether the app should restore state from a previous session.
+        /// By default, the app will only restore state when args.PreviousExecutionState is <see cref="ApplicationExecutionState"/>.Terminated.
+        /// 
+        /// Note: restoring from state will prevent OnLaunchApplicationAsync() from getting called, 
+        /// as that is only called during a fresh launch. Restoring will trigger OnResumeApplicationAsync() instead.
+        /// </summary>
+        /// <returns>True if the app should restore state. False if the app should perform a fresh launch.</returns>
+        protected virtual bool ShouldRestoreState(IActivatedEventArgs args) => args.PreviousExecutionState == ApplicationExecutionState.Terminated;
+
+        /// <summary>
         /// Initializes the Frame and its content.
         /// </summary>
         /// <param name="args">The <see cref="IActivatedEventArgs"/> instance containing the event data.</param>
@@ -302,7 +373,7 @@ namespace Prism.Windows
 
             if (ExtendedSplashScreenFactory != null)
             {
-                Page extendedSplashScreen = this.ExtendedSplashScreenFactory.Invoke(args.SplashScreen);
+                Page extendedSplashScreen = ExtendedSplashScreenFactory.Invoke(args.SplashScreen);
                 rootFrame.Content = extendedSplashScreen;
             }
 
@@ -329,14 +400,16 @@ namespace Prism.Windows
             ConfigureViewModelLocator();
 
             OnRegisterKnownTypesForSerialization();
-            if (args.PreviousExecutionState == ApplicationExecutionState.Terminated)
+            bool canRestore = await SessionStateService.CanRestoreSessionStateAsync();
+            bool shouldRestore = canRestore && ShouldRestoreState(args);
+            if (shouldRestore)
             {
                 await SessionStateService.RestoreSessionStateAsync();
             }
 
             await OnInitializeAsync(args);
 
-            if (args.PreviousExecutionState == ApplicationExecutionState.Terminated)
+            if (shouldRestore)
             {
                 // Restore the saved session state and navigate to the last page visited
                 try
@@ -354,7 +427,7 @@ namespace Prism.Windows
 
             return rootFrame;
         }
-
+        
         /// <summary>
         /// Handling the forward navigation request from the <see cref="IDeviceGestureService"/>
         /// </summary>
@@ -376,14 +449,13 @@ namespace Prism.Windows
         /// <param name="e"></param>
         private void OnGoBackRequested(object sender, DeviceGestureEventArgs e)
         {
-            if (NavigationService.CanGoBack())
+            if (!e.Handled)
             {
-                NavigationService.GoBack();
-                e.Handled = true;
-            }
-            else if (DeviceGestureService.IsHardwareBackButtonPresent && e.IsHardwareButton)
-            {
-                Exit();
+                if (NavigationService.CanGoBack())
+                {
+                    NavigationService.GoBack();
+                    e.Handled = true;
+                }
             }
         }
 
@@ -410,7 +482,8 @@ namespace Prism.Windows
         }
 
         /// <summary>
-        /// Creates the navigation service. Use this to inject your own INavigationService implementation.
+        /// Creates the navigation service.
+        /// Use this to inject your own INavigationService implementation.
         /// </summary>
         /// <param name="rootFrame">The root frame.</param>
         /// <returns>The initialized navigation service.</returns>
@@ -418,6 +491,11 @@ namespace Prism.Windows
 
         /// <summary>
         /// Creates the navigation service.
+        /// 
+        /// Use this to implement your own PrismApplication, e.g. to provide support for another IoC container.
+        /// Note that this method is overridden in the bases classes for Unity, Autofac, etc. to register the navigation service in the IoC container.
+        /// 
+        /// Use OnCreateNavigationService instead if you want to inject your own INavigationService implementation.
         /// </summary>
         /// <param name="rootFrame">The root frame.</param>
         /// <param name="sessionStateService">The session state service.</param>
@@ -470,9 +548,27 @@ namespace Prism.Windows
         }
 
         /// <summary>
+        /// Invoked when the application resumes from a suspended state.
+        /// If the app gets terminated after suspension, it will go through the OnLaunced or OnActivated events instead.
+        /// 
+        /// Restores the navigation state if <see cref="RestoreNavigationStateOnResume"/> is set (default true).
+        /// Then calls the <see cref="OnResumeApplicationAsync"/> as fire and forget.
+        /// </summary>
+        /// <param name="sender">The source of the suspend request.</param>
+        /// <param name="e">Details about the suspend request.</param>
+        private void OnResuming(object sender, object e)
+        {
+            if(RestoreNavigationStateOnResume)
+                NavigationService.RestoreSavedNavigation();
+
+            _handledOnResume = true;
+            OnResumeApplicationAsync(null); // explicit fire and forget, would lock the app if we await
+        }
+
+        /// <summary>
         /// Invoked when the application is suspending, but before the general suspension calls.
         /// </summary>
         /// <returns>Task to complete.</returns>
-        protected virtual Task OnSuspendingApplicationAsync() => Task.FromResult<object>(null);
+        protected virtual Task OnSuspendingApplicationAsync() => Task.CompletedTask;
     }
 }

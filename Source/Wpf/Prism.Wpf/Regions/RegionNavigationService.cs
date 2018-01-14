@@ -1,13 +1,13 @@
 
 
+using CommonServiceLocator;
+using Prism.Common;
+using Prism.Properties;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Windows;
-using Prism.Properties;
-using Microsoft.Practices.ServiceLocation;
-using Prism.Common;
 
 namespace Prism.Regions
 {
@@ -30,19 +30,13 @@ namespace Prism.Regions
         public RegionNavigationService(IServiceLocator serviceLocator, IRegionNavigationContentLoader regionNavigationContentLoader, IRegionNavigationJournal journal)
         {
             if (serviceLocator == null)
-            {
-                throw new ArgumentNullException("serviceLocator");
-            }
+                throw new ArgumentNullException(nameof(serviceLocator));
 
             if (regionNavigationContentLoader == null)
-            {
-                throw new ArgumentNullException("regionNavigationContentLoader");
-            }
+                throw new ArgumentNullException(nameof(regionNavigationContentLoader));
 
             if (journal == null)
-            {
-                throw new ArgumentNullException("journal");
-            }
+                throw new ArgumentNullException(nameof(journal));
 
             this.serviceLocator = serviceLocator;
             this.regionNavigationContentLoader = regionNavigationContentLoader;
@@ -126,7 +120,8 @@ namespace Prism.Regions
         /// <param name="navigationParameters">The navigation parameters specific to the navigation request.</param>
         public void RequestNavigate(Uri target, Action<NavigationResult> navigationCallback, NavigationParameters navigationParameters)
         {
-            if (navigationCallback == null) throw new ArgumentNullException("navigationCallback");
+            if (navigationCallback == null)
+                throw new ArgumentNullException(nameof(navigationCallback));
 
             try
             {
@@ -141,14 +136,10 @@ namespace Prism.Regions
         private void DoNavigate(Uri source, Action<NavigationResult> navigationCallback, NavigationParameters navigationParameters)
         {
             if (source == null)
-            {
-                throw new ArgumentNullException("source");
-            }
+                throw new ArgumentNullException(nameof(source));
 
             if (this.Region == null)
-            {
                 throw new InvalidOperationException(Resources.NavigationServiceHasNoRegion);
-            }
 
             this.currentNavigationContext = new NavigationContext(this, source, navigationParameters);
 
@@ -269,7 +260,10 @@ namespace Prism.Regions
                 IRegionNavigationJournalEntry journalEntry = this.serviceLocator.GetInstance<IRegionNavigationJournalEntry>();
                 journalEntry.Uri = navigationContext.Uri;
                 journalEntry.Parameters = navigationContext.Parameters;
-                this.journal.RecordNavigation(journalEntry);
+
+                bool persistInHistory = PersistInHistory(activeViews);
+
+                this.journal.RecordNavigation(journalEntry, persistInHistory);
 
                 // The view can be informed of navigation
                 Action<INavigationAware> action = (n) => n.OnNavigatedTo(navigationContext);
@@ -284,6 +278,16 @@ namespace Prism.Regions
             {
                 this.NotifyNavigationFailed(navigationContext, navigationCallback, e);
             }
+        }
+
+        private static bool PersistInHistory(object[] activeViews)
+        {
+            bool persist = true;
+            if (activeViews.Length > 0)
+            {
+                MvvmHelpers.ViewAndViewModelAction<IJournalAware>(activeViews[0], ija => { persist &= ija.PersistInHistory(); });
+            }
+            return persist;
         }
 
         private void NotifyNavigationFailed(NavigationContext navigationContext, Action<NavigationResult> navigationCallback, Exception e)

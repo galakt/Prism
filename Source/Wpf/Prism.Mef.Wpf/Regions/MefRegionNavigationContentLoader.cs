@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
-using Microsoft.Practices.ServiceLocation;
+using CommonServiceLocator;
 using Prism.Regions;
 
 namespace Prism.Mef.Regions
@@ -39,7 +39,7 @@ namespace Prism.Mef.Regions
         protected override IEnumerable<object> GetCandidatesFromRegion(IRegion region, string candidateNavigationContract)
         {
             if (candidateNavigationContract == null || candidateNavigationContract.Equals(string.Empty))
-                throw new ArgumentNullException("candidateNavigationContract");
+                throw new ArgumentNullException(nameof(candidateNavigationContract));
 
             IEnumerable<object> contractCandidates = base.GetCandidatesFromRegion(region, candidateNavigationContract);
 
